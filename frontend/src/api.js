@@ -1,19 +1,17 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://games-mloc.vercel.app/api';
+export const getApps = () => axios.get(`${import.meta.env.VITE_API_URL}/api/apps`);
 
-const api = axios.create({
-  baseURL: API_URL,
-});
+export const getRecentApps = () => axios.get(`${import.meta.env.VITE_API_URL}/api/apps/recent`);
 
-export const getApps = () => api.get('/apps');
-export const getRecentApps = () => api.get('/apps/recent');
-export const addApp = (data, adminPassword) => api.post('/apps', data, {
+export const addApp = (data, adminPassword) => axios.post(`${import.meta.env.VITE_API_URL}/api/apps`, data, {
   headers: { Authorization: `Bearer ${adminPassword}` }
 });
-export const deleteApp = (id, adminPassword) => api.delete(`/apps/${id}`, {
+
+export const deleteApp = (id, adminPassword) => axios.delete(`${import.meta.env.VITE_API_URL}/api/apps/${id}`, {
   headers: { Authorization: `Bearer ${adminPassword}` }
 });
+
 export const uploadLogo = async (file, adminPassword) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -32,6 +30,5 @@ export const uploadLogo = async (file, adminPassword) => {
   }
   return { data };
 };
-export const sendContactMessage = (data) => api.post('/contact', data);
 
-export default api;
+export const sendContactMessage = (data) => axios.post(`${import.meta.env.VITE_API_URL}/api/contact`, data);

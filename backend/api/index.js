@@ -1,11 +1,8 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -23,9 +20,10 @@ const upload = multer({
 
 
 // Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // Setup Nodemailer transporter
 const transporter = nodemailer.createTransport({
@@ -49,7 +47,7 @@ const adminAuth = (req, res, next) => {
 };
 
 // POST upload file
-app.post('/api/upload', adminAuth, upload.single('file'), async (req, res) => {
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
 

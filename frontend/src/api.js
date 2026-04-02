@@ -14,15 +14,23 @@ export const addApp = (data, adminPassword) => api.post('/apps', data, {
 export const deleteApp = (id, adminPassword) => api.delete(`/apps/${id}`, {
   headers: { Authorization: `Bearer ${adminPassword}` }
 });
-export const uploadLogo = (file, adminPassword) => {
+export const uploadLogo = async (file, adminPassword) => {
   const formData = new FormData();
-  formData.append('logo', file);
-  return api.post('/upload', formData, {
-    headers: { 
-      Authorization: `Bearer ${adminPassword}`,
-      'Content-Type': 'multipart/form-data'
-    }
+  formData.append("file", file);
+
+  const response = await fetch(`${import.meta.env.VITE_API_URL}/api/upload`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${adminPassword}`
+    },
+    body: formData
   });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Upload failed");
+  }
+  return { data };
 };
 export const sendContactMessage = (data) => api.post('/contact', data);
 

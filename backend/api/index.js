@@ -10,24 +10,17 @@ const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: "*"
+}));
 app.use(express.json());
 
 // Setup multer for local file uploads
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const uploadPath = path.join(__dirname, 'uploads');
-      if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath);
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      cb(null, Date.now() + '-' + file.originalname);
-    }
-  })
+  storage: multer.memoryStorage()
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
@@ -56,10 +49,40 @@ const adminAuth = (req, res, next) => {
 };
 
 // POST upload file
-app.post('/api/upload', adminAuth, upload.single('logo'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ url: fileUrl });
+app.post('/api/upload', adminAuth, upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const fileName = `${Date.now()}-${file.originalname}`;
+
+    // Upload to Supabase bucket (app-logos)
+    const { data, error } = await supabase.storage
+      .from('app-logos')
+      .upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+      });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Get public URL
+    const { data: publicUrl } = supabase.storage
+      .from('app-logos')
+      .getPublicUrl(fileName);
+
+    res.json({
+      success: true,
+      url: publicUrl.publicUrl
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET all apps
@@ -156,6 +179,4 @@ app.post('/api/contact', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Backend server running on http://localhost:${port}`);
-});
+module.exports = app;

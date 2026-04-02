@@ -10,7 +10,7 @@ const formData = new FormData();
 const blob = new Blob(['fake image data']);
 formData.append('logo', blob, 'test.png');
 
-fetch('http://localhost:5000/api/upload', {
+fetch('https://games-mloc.vercel.app/api/upload', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ' + pw
@@ -20,7 +20,7 @@ fetch('http://localhost:5000/api/upload', {
   console.log('UPLOAD RESPONSE (status=' + t.status + '):', t);
   if (t.includes('url')) {
     const url = JSON.parse(t).url;
-    fetch('http://localhost:5000/api/apps', {
+    fetch('https://games-mloc.vercel.app/api/apps', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + pw,

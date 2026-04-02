@@ -1,0 +1,161 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
+const nodemailer = require('nodemailer');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+const app = express();
+const port = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(express.json());
+
+// Setup multer for local file uploads
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath);
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + '-' + file.originalname);
+    }
+  })
+});
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Setup Nodemailer transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+// Middleware for Admin Authentication
+const adminAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No authorization header' });
+  const token = authHeader.split(' ')[1];
+  if (token !== process.env.ADMIN_PASSWORD) {
+    return res.status(403).json({ error: 'Forbidden. Incorrect password.' });
+  }
+  next();
+};
+
+// POST upload file
+app.post('/api/upload', adminAuth, upload.single('logo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  res.json({ url: fileUrl });
+});
+
+// GET all apps
+app.get('/api/apps', async (req, res) => {
+  try {
+    const { data: apps, error } = await supabase
+      .from('apps')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    res.json(apps);
+  } catch (error) {
+    console.error('Error fetching all apps:', error.message);
+    res.status(500).json({ error: 'Server error fetching apps' });
+  }
+});
+
+// GET recent 10 apps
+app.get('/api/apps/recent', async (req, res) => {
+  try {
+    const { data: apps, error } = await supabase
+      .from('apps')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    res.json(apps);
+  } catch (error) {
+    console.error('Error fetching recent apps:', error.message);
+    res.status(500).json({ error: 'Server error fetching recent apps' });
+  }
+});
+
+// POST add app (Admin only)
+app.post('/api/apps', adminAuth, async (req, res) => {
+  try {
+    const { name, logo_url, download_link } = req.body;
+    if (!name || !logo_url || !download_link) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const { data: app, error } = await supabase
+      .from('apps')
+      .insert([{ name, logo_url, download_link }])
+      .select();
+
+    if (error) throw error;
+    res.status(201).json(app[0]);
+  } catch (error) {
+    console.error('Error adding app:', error.message);
+    res.status(500).json({ error: 'Server error adding app' });
+  }
+});
+
+// DELETE app (Admin only)
+app.delete('/api/apps/:id', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase
+      .from('apps')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ message: 'App deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting app:', error.message);
+    res.status(500).json({ error: 'Server error deleting app' });
+  }
+});
+
+// POST contact email
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { email, topic, message } = req.body;
+    if (!email || !topic || !message) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Send email
+    await transporter.sendMail({
+      from: `"${email}" <${email}>`, // sender address (from the form)
+      to: process.env.SMTP_USER, // site admin email receiving the message
+      subject: `MSU Games Contact: ${topic}`,
+      text: `From: ${email}\nTopic: ${topic}\n\nMessage:\n${message}`,
+    });
+
+    res.json({ message: 'Email sent successfully' });
+  } catch (error) {
+    console.error('Error sending email:', error.message);
+    res.status(500).json({ error: 'Server error sending email', details: error.message });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Backend server running on http://localhost:${port}`);
+});
